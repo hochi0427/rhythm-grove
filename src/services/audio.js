@@ -1,6 +1,8 @@
 let context
 const voices = new Set()
 const beatEvents = new Set()
+// Music uses this same context, so song audio, guide clicks and drum hits share a clock.
+export function getAudioContext() { return context }
 export function unlockAudio() {
   const AudioContext = window.AudioContext || window.webkitAudioContext
   if (!AudioContext) return
