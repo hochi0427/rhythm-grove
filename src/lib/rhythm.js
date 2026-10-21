@@ -12,7 +12,7 @@ export function patternEvents(notes) {
     return event
   })
 }
-export function createEvaluator(expected, windowMs = 180) {
+export function createEvaluator(expected, windowMs = 180, onJudgement = () => {}) {
   const judged = new Map()
   let extras = 0
   return {
@@ -22,15 +22,19 @@ export function createEvaluator(expected, windowMs = 180) {
         const delta = Math.abs(target - time)
         if (!judged.has(index) && delta < distance) { nearest = index; distance = delta }
       })
-      if (nearest < 0 || distance > windowMs) { extras++; return 'Miss' }
+      if (nearest < 0 || distance > windowMs) { extras++; onJudgement('Miss'); return 'Miss' }
       const result = distance <= 65 ? 'Perfect' : distance <= 130 ? 'Good' : 'Miss'
       judged.set(nearest, result)
+      onJudgement(result)
       return result
     },
     expire(time) {
       let missed = false
       expected.forEach((target, index) => {
-        if (!judged.has(index) && time > target + windowMs) { judged.set(index, 'Miss'); missed = true }
+        if (!judged.has(index) && time > target + windowMs) {
+          judged.set(index, 'Miss'); missed = true
+          onJudgement('Miss')
+        }
       })
       return missed
     },

@@ -4,23 +4,35 @@ import AppIcon from './AppIcon.vue'
 import DrumIllustration from './DrumIllustration.vue'
 import RhythmNotation from './RhythmNotation.vue'
 import { levels, patternEvents, createEvaluator } from '../lib/rhythm'
-import { unlockAudio, playDrum, cancelScheduledAudio } from '../services/audio'
+import { unlockAudio, playDrum, cancelScheduledAudio, dispatchAudioBeats } from '../services/audio'
 import { drumInput } from '../services/drumInput'
 const props = defineProps({ mode: Object, hit: Boolean })
-const emit = defineEmits(['back', 'hit', 'complete'])
+const emit = defineEmits(['back', 'hit', 'complete', 'judgement', 'countdown-beat'])
 const bpm = ref(80), level = ref('easy'), phase = ref('idle'), beat = ref(-1), countdown = ref(4)
 const accuracy = ref(0), feedback = ref(''), results = ref([]), progress = ref(0)
 const busy = computed(() => !['idle', 'done'].includes(phase.value))
 const notes = computed(() => levels[level.value].notes)
 let frame, evaluator, startTime, repeatTime, endTime, interval, demoTime, generation = 0
 const instruction = computed(() => ({ idle: 'A little practice goes a long way.', countin: 'Find the pulse. Your round starts in…', listening: 'Listen closely. Your turn is coming.', ready: 'Your turn! Get ready in…', playing: props.mode.id === 'copy' ? 'Repeat the rhythm you heard.' : 'Play along. You’ve got this.', done: accuracy.value >= 80 ? 'Beautiful rhythm. Keep on growing!' : 'Every beat is a chance to grow.' })[phase.value])
-const unsubscribe = drumInput.subscribe(({ timestamp }) => {
+const unsubscribe = drumInput.subscribe(({ source, timestamp }) => {
+  // Temporary diagnostics: phase explains why count-in/listening hits are unjudged.
+  console.info('[Rhythm Grove][Game] Drum input received', { source, timestamp, mode: props.mode.id, phase: phase.value, evaluated: phase.value === 'playing' })
   if (phase.value !== 'playing') return
   feedback.value = evaluator.hit(timestamp)
   updateScore()
 })
 function updateScore() { accuracy.value = evaluator.accuracy; results.value = [...evaluator.results] }
 function reset() { drumInput.practiceActive = false; generation++; cancelAnimationFrame(frame); cancelScheduledAudio(); phase.value = 'idle'; feedback.value = ''; beat.value = -1; progress.value = 0; accuracy.value = 0; results.value = [] }
+function scheduleCountdown(countInStart, token) {
+  const countInEnd = countInStart + 4 * interval
+  const shouldSend = () => generation === token && performance.now() < countInEnd
+  for (let i = 0; i < 4; i++) {
+    playDrum((countInStart + i * interval - performance.now()) / 1000, true, {
+      expiresAfter: interval / 1000,
+      onBeat: () => { if (shouldSend()) emit('countdown-beat', shouldSend) },
+    })
+  }
+}
 async function start() {
   reset()
   const token = generation
@@ -35,11 +47,15 @@ async function start() {
   repeatTime = props.mode.id === 'copy' ? demoTime + (duration + 4) * interval : demoTime
   endTime = repeatTime + duration * interval
   const expected = events.filter(e => !e.rest).map(e => repeatTime + e.beat * interval)
-  evaluator = createEvaluator(expected)
-  for (let i = 0; i < 4; i++) playDrum((startTime + i * interval - performance.now()) / 1000, true)
+  // Emit only newly registered judgements, including every expired note.
+  evaluator = createEvaluator(expected, undefined, result => {
+    console.info('[Rhythm Grove][Game] Judgement determined', { mode: props.mode.id, result })
+    emit('judgement', result)
+  })
+  scheduleCountdown(startTime, token)
   if (props.mode.id === 'copy') {
     events.filter(e => !e.rest).forEach(e => playDrum((demoTime + e.beat * interval - performance.now()) / 1000))
-    for (let i = 0; i < 4; i++) playDrum((repeatTime - (4-i) * interval - performance.now()) / 1000, true)
+    scheduleCountdown(repeatTime - 4 * interval, token)
   }
   if (props.mode.id === 'follow') expected.forEach(time => playDrum((time - performance.now()) / 1000, true))
   phase.value = 'countin'
@@ -56,6 +72,7 @@ async function start() {
       if (evaluator.expire(now)) feedback.value = 'Miss'
       updateScore()
     }
+    dispatchAudioBeats()
     if (now >= endTime + 180) {
       drumInput.practiceActive = false
       phase.value = 'done'; beat.value = -1; updateScore()

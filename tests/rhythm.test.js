@@ -52,3 +52,27 @@ test('a silent round scores zero and judges every missed note', () => {
   assert.deepEqual(evaluator.results, ['Miss', 'Miss', 'Miss'])
   assert.equal(evaluator.accuracy, 0)
 })
+
+test('judgement callback emits once per judged note and once per separate extra hit', () => {
+  const judgements = []
+  const evaluator = createEvaluator([1000, 2000, 3000, 4000, 5000], undefined, result => judgements.push(result))
+  assert.equal(evaluator.hit(1000), 'Perfect')
+  assert.equal(evaluator.hit(2100), 'Good')
+  assert.equal(evaluator.hit(3150), 'Miss')
+  assert.equal(evaluator.hit(3400), 'Miss')
+  assert.equal(evaluator.expire(6000), true)
+  assert.equal(evaluator.expire(6100), false)
+  assert.deepEqual(judgements, ['Perfect', 'Good', 'Miss', 'Miss', 'Miss', 'Miss'])
+  assert.deepEqual(evaluator.results, ['Perfect', 'Good', 'Miss', 'Miss', 'Miss'])
+  assert.equal(evaluator.accuracy, 28)
+})
+
+test('repeated identical grades on different notes each emit a judgement', () => {
+  const judgements = []
+  const evaluator = createEvaluator([1000, 2000], undefined, result => judgements.push(result))
+  evaluator.hit(1000)
+  evaluator.hit(2000)
+  evaluator.expire(3000)
+  assert.deepEqual(judgements, ['Perfect', 'Perfect'])
+  assert.equal(evaluator.accuracy, 100)
+})

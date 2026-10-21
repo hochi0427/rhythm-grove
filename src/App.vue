@@ -13,7 +13,7 @@ const modes = [
   { id: 'copy', name: 'Copy the Rhythm', icon: 'headphones', description: 'Listen, remember, repeat. Train your ears and bring a rhythm back to life.', tag: 'Listen & repeat', skill: 'Listening & memory' },
   { id: 'read', name: 'Read & Play', icon: 'note', description: 'Turn notes into sound. Read a rhythm and let your hands do the talking.', tag: 'Make music', skill: 'Reading & coordination' },
 ]
-const { connection, connectArduino, disconnectArduino } = useArduino()
+const { connection, connectArduino, disconnectArduino, sendJudgement, sendCountdownBeat } = useArduino()
 const page = ref('home'), selected = ref(null), hit = ref(false), help = ref(false)
 let hitTimer
 const stats = ref(readStats())
@@ -40,7 +40,7 @@ onBeforeUnmount(() => { detachKeyboard(); unsubscribe(); clearTimeout(hitTimer) 
     <main>
       <header class="topbar"><div class="breadcrumb"><AppIcon name="leaf" :size="16"/><span>Your space to find your rhythm</span></div><div class="topbar-inputs"><ArduinoConnection :connection="connection" @connect="connectArduino" @disconnect="disconnectArduino"/><div class="keyboard-status"><span/>Keyboard ready<kbd>space</kbd></div></div></header>
       <div class="main-content">
-        <PracticeSession v-if="selected" :key="selected" :mode="currentMode" :hit="hit" @back="goHome" @hit="triggerHit" @complete="complete"/>
+        <PracticeSession v-if="selected" :key="selected" :mode="currentMode" :hit="hit" @back="goHome" @hit="triggerHit" @complete="complete" @judgement="sendJudgement" @countdown-beat="sendCountdownBeat"/>
         <template v-else-if="page === 'home'">
           <div class="welcome-heading"><div><div class="eyebrow"><span/>A LITTLE RHYTHM. A LOT OF GROWTH.</div><h1>Welcome to Rhythm Grove<span class="heading-dot">.</span></h1><p>Learn rhythm through listening, reading, and playing.</p></div><span class="welcome-flower" aria-hidden="true">✳</span></div>
           <section class="hero-card"><div class="hero-copy"><span class="hero-tag"><AppIcon name="sprout" :size="15"/>EVERY BEAT IS A NEW BEGINNING</span><h2>Find your rhythm.<br/>Watch it grow.</h2><p>No perfect timing needed to begin.<br/>Just a little curiosity and a beat to follow.</p><button class="primary-button" @click="selectMode('follow')">Let’s make some music<AppIcon name="arrow" :size="19"/></button><div class="hero-hint"><span class="tiny-key">⌨</span> Press <kbd>space</kbd> or tap the drum to try it</div></div><div class="hero-illustration"><span class="orbit orbit-one"/><span class="orbit orbit-two"/><DrumIllustration :hit="hit" @hit="triggerHit"/><span class="drum-caption">a little tap goes a long way</span></div></section>
